@@ -2,9 +2,9 @@ import retrieval
 
 # K1, B, RRF_K set from the best values printed by tune.py;
 # RM3 uses standard defaults (Indri/Anserini), not tuned
-K1, B = 0.9, 0.4
+K1, B = 1.2, 0.2
 MU, FB_DOCS, FB_TERMS, ORIG_WEIGHT = 1000, 10, 10, 0.5
-RRF_K = 60
+RRF_K = 11
 
 
 def main():

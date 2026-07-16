@@ -13,8 +13,6 @@ B_RANGE, B_STEP = (0.1, 1.0), 0.05
 RRF_K_RANGE = (10, 200)
 BM25_TRIALS, RRF_TRIALS = 30, 20
 
-optuna.logging.set_verbosity(optuna.logging.WARNING)
-
 
 def parse_qrels(path):
     qrels = {}
