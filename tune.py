@@ -5,8 +5,6 @@ import optuna
 
 import retrieval
 
-N_FOLDS = 10
-
 MU, FB_DOCS, FB_TERMS, ORIG_WEIGHT = 1000, 10, 50, 0.5
 
 # search spaces
@@ -98,29 +96,13 @@ def tune(train, qrels):
     return best_bm25, best_rm3, retrieval.rrf(best_bm25, best_rm3, k)
 
 
-def cross_validate(train, qrels):
-    qids = [qid for qid in train if qid in qrels]
-    folds = [qids[i::N_FOLDS] for i in range(N_FOLDS)]
-
-    scores = {"bm25": [], "rm3": [], "rrf": []}
-    for i, test_qids in enumerate(folds):
-        train_qrels = {qid: qrels[qid] for qid in qids if qid not in test_qids}
-        test_qrels = {qid: qrels[qid] for qid in test_qids}
-
-        for name, lists in zip(scores, tune(train, train_qrels)):
-            scores[name].append(mean_ap(lists, test_qrels))
-        print(f"fold {i}: " + " ".join(f"{n}={s[-1]:.4f}" for n, s in scores.items()))
-
-    for name, s in scores.items():
-        print(f"{name}: cv map={sum(s) / len(s):.4f}")
-
-
 def main():
     queries = retrieval.parse_queries(retrieval.QUERIES)
     train = dict(list(queries.items())[: retrieval.N_TRAIN])
     qrels = parse_qrels(os.path.join(retrieval.DATA, "qrels_50_Queries"))
 
-    cross_validate(train, qrels)
+    for name, lists in zip(("bm25", "rm3", "rrf"), tune(train, qrels)):
+        print(f"{name}: map={mean_ap(lists, qrels):.4f}")
 
 
 if __name__ == "__main__":
