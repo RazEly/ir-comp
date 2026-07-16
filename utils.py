@@ -30,7 +30,7 @@ def weight_query(model):
     return "#weight(" + " ".join(f'{w} "{t}"' for t, w in model.items()) + ")"
 
 
-def indri_run(queries, index, extra_args, count=1000):
+def indri_run(queries, index, extra_args, count=1000, threads=os.cpu_count()):
     body = "".join(
         f"<query><number>{qid}</number><text>{text}</text></query>"
         for qid, text in queries.items()
@@ -44,6 +44,7 @@ def indri_run(queries, index, extra_args, count=1000):
             params_path,
             f"-index={index}",
             f"-count={count}",
+            f"-threads={threads}",
             "-trecFormat=true",
         ]
         + list(extra_args)
