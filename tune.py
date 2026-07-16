@@ -6,7 +6,15 @@ import optuna
 import retrieval
 
 N_FOLDS = 10
-MU_GRID = range(250, 3250, 250)
+
+# RM3 uses standard defaults (Indri/Anserini), not tuned
+MU, FB_DOCS, FB_TERMS, ORIG_WEIGHT = 2500, 10, 10, 0.5
+
+# search spaces
+K1_RANGE, K1_STEP = (0.4, 2.0), 0.1
+B_RANGE, B_STEP = (0.1, 1.0), 0.05
+RRF_K_RANGE = (10, 200)
+BM25_TRIALS, RRF_TRIALS = 30, 20
 
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 
@@ -64,52 +72,31 @@ def bm25_lists(train, k1, b):
     )
 
 
-def ql_lists(train, mu):
-    return cached(f"ql_mu={mu}", lambda: retrieval.ql(train, retrieval.INDEX, mu))
-
-
-def rm3_lists(train, mu, fb_docs, fb_terms, w):
-    w = round(w, 2)
+def rm3_lists(train):
     return cached(
-        f"rm3n_mu={mu}_fd={fb_docs}_ft={fb_terms}_w={w}",
-        lambda: retrieval.rm3(train, retrieval.INDEX, mu, fb_docs, fb_terms, w),
+        f"rm3n_mu={MU}_fd={FB_DOCS}_ft={FB_TERMS}_w={ORIG_WEIGHT}",
+        lambda: retrieval.rm3(
+            train, retrieval.INDEX, MU, FB_DOCS, FB_TERMS, ORIG_WEIGHT
+        ),
     )
 
 
 def tune(train, qrels):
-    # stage 1: tune mu on the plain QL run, then freeze it for feedback
-    mu = max(MU_GRID, key=lambda m: mean_ap(ql_lists(train, m), qrels))
-
     def bm25_objective(trial):
-        k1 = trial.suggest_float("k1", 0.4, 2.0, step=0.1)
-        b = trial.suggest_float("b", 0.1, 1.0, step=0.05)
+        k1 = trial.suggest_float("k1", *K1_RANGE, step=K1_STEP)
+        b = trial.suggest_float("b", *B_RANGE, step=B_STEP)
         return mean_ap(bm25_lists(train, k1, b), qrels)
 
-    def rm3_objective(trial):
-        fb_docs = trial.suggest_int("fb_docs", 10, 100, step=10)
-        fb_terms = trial.suggest_int("fb_terms", 10, 100, step=10)
-        w = trial.suggest_float("orig_weight", 0.1, 0.9, step=0.05)
-        return mean_ap(rm3_lists(train, mu, fb_docs, fb_terms, w), qrels)
-
-    bm25_params = optimize(bm25_objective, n_trials=30)
-    best_bm25 = bm25_lists(train, bm25_params["k1"], bm25_params["b"])
-
-    rm3_params = optimize(rm3_objective, n_trials=40)
-    best_rm3 = rm3_lists(
-        train,
-        mu,
-        rm3_params["fb_docs"],
-        rm3_params["fb_terms"],
-        rm3_params["orig_weight"],
-    )
+    p = optimize(bm25_objective, n_trials=BM25_TRIALS)
+    best_bm25 = bm25_lists(train, p["k1"], p["b"])
+    best_rm3 = rm3_lists(train)
 
     def rrf_objective(trial):
-        k = trial.suggest_int("k", 10, 200)
+        k = trial.suggest_int("k", *RRF_K_RANGE)
         return mean_ap(retrieval.rrf(best_bm25, best_rm3, k), qrels)
 
-    rrf_params = optimize(rrf_objective, n_trials=20)
-    params = {"mu": mu, "bm25": bm25_params, "rm3": rm3_params, "rrf": rrf_params}
-    return params, best_bm25, best_rm3
+    k = optimize(rrf_objective, n_trials=RRF_TRIALS)["k"]
+    return best_bm25, best_rm3, retrieval.rrf(best_bm25, best_rm3, k)
 
 
 def cross_validate(train, qrels):
@@ -121,16 +108,9 @@ def cross_validate(train, qrels):
         train_qrels = {qid: qrels[qid] for qid in qids if qid not in test_qids}
         test_qrels = {qid: qrels[qid] for qid in test_qids}
 
-        params, best_bm25, best_rm3 = tune(train, train_qrels)
-        fused = retrieval.rrf(best_bm25, best_rm3, params["rrf"]["k"])
-        scores["bm25"].append(mean_ap(best_bm25, test_qrels))
-        scores["rm3"].append(mean_ap(best_rm3, test_qrels))
-        scores["rrf"].append(mean_ap(fused, test_qrels))
-
-        print(
-            f"fold {i}: mu={params['mu']} bm25={scores['bm25'][-1]:.4f} "
-            f"rm3={scores['rm3'][-1]:.4f} rrf={scores['rrf'][-1]:.4f}"
-        )
+        for name, lists in zip(scores, tune(train, train_qrels)):
+            scores[name].append(mean_ap(lists, test_qrels))
+        print(f"fold {i}: " + " ".join(f"{n}={s[-1]:.4f}" for n, s in scores.items()))
 
     for name, s in scores.items():
         print(f"{name}: cv map={sum(s) / len(s):.4f}")

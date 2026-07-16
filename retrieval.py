@@ -26,10 +26,6 @@ def clean(text):
     return re.sub(r"[^a-z0-9]+", " ", text.lower()).strip()
 
 
-def weight_query(model):
-    return "#weight(" + " ".join(f'{w} "{t}"' for t, w in model.items()) + ")"
-
-
 def indri_run(queries, index, extra_args, count=1000):
     body = "".join(
         f"<query><number>{qid}</number><text>{text}</text></query>"
@@ -62,20 +58,12 @@ def parse_trec(text):
     return lists
 
 
-def dumpindex(index, *args):
-    return _run(["dumpindex", index] + list(args))
-
-
-def bm25(queries, index, k1=0.9, b=0.4, count=1000):
+def bm25(queries, index, k1, b, count=1000):
     baseline = f"-baseline=okapi,k1:{k1},b:{b},k3:{count}"
     return indri_run(queries, index, [baseline], count)
 
 
-def ql(queries, index, mu, count=1000):
-    return indri_run(queries, index, [f"-rule=method:dirichlet,mu:{mu}"], count)
-
-
-def rm3(queries, index, mu=1000, fb_docs=25, fb_terms=25, orig_weight=0.5, count=1000):
+def rm3(queries, index, mu, fb_docs, fb_terms, orig_weight, count=1000):
     return indri_run(
         queries,
         index,
@@ -89,7 +77,7 @@ def rm3(queries, index, mu=1000, fb_docs=25, fb_terms=25, orig_weight=0.5, count
     )
 
 
-def rrf(lists_a, lists_b, k=60, count=1000):
+def rrf(lists_a, lists_b, k, count=1000):
     fused = {}
     for qid in set(lists_a) | set(lists_b):
         scores = {}
