@@ -30,7 +30,7 @@ def weight_query(model):
     return "#weight(" + " ".join(f'{w} "{t}"' for t, w in model.items()) + ")"
 
 
-def indri_run(queries, index, extra_args, count=1000, threads=os.cpu_count()):
+def indri_run(queries, index, extra_args, count=1000):
     body = "".join(
         f"<query><number>{qid}</number><text>{text}</text></query>"
         for qid, text in queries.items()
@@ -44,7 +44,6 @@ def indri_run(queries, index, extra_args, count=1000, threads=os.cpu_count()):
             params_path,
             f"-index={index}",
             f"-count={count}",
-            f"-threads={threads}",
             "-trecFormat=true",
         ]
         + list(extra_args)
@@ -65,3 +64,44 @@ def parse_trec(text):
 
 def dumpindex(index, *args):
     return _run(["dumpindex", index] + list(args))
+
+
+def bm25(queries, index, k1=0.9, b=0.4, count=1000):
+    baseline = f"-baseline=okapi,k1:{k1},b:{b},k3:{count}"
+    return indri_run(queries, index, [baseline], count)
+
+
+def ql(queries, index, mu, count=1000):
+    return indri_run(queries, index, [f"-rule=method:dirichlet,mu:{mu}"], count)
+
+
+def rm3(queries, index, mu=1000, fb_docs=25, fb_terms=25, orig_weight=0.5, count=1000):
+    return indri_run(
+        queries,
+        index,
+        [
+            f"-rule=method:dirichlet,mu:{mu}",
+            f"-fbDocs={fb_docs}",
+            f"-fbTerms={fb_terms}",
+            f"-fbOrigWeight={orig_weight}",
+        ],
+        count,
+    )
+
+
+def rrf(lists_a, lists_b, k=60, count=1000):
+    fused = {}
+    for qid in set(lists_a) | set(lists_b):
+        scores = {}
+        for lists in (lists_a, lists_b):
+            for rank, (docid, _) in enumerate(lists.get(qid, []), start=1):
+                scores[docid] = scores.get(docid, 0.0) + 1.0 / (k + rank)
+        fused[qid] = sorted(scores.items(), key=lambda x: (-x[1], x[0]))[:count]
+    return fused
+
+
+def write_run(lists, path, tag):
+    with open(path, "w") as f:
+        for qid in sorted(lists, key=int):
+            for rank, (docid, score) in enumerate(lists[qid], start=1):
+                f.write(f"{qid} Q0 {docid} {rank} {score} {tag}\n")
