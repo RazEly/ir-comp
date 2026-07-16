@@ -7,8 +7,7 @@ import retrieval
 
 N_FOLDS = 10
 
-# RM3 uses standard defaults (Indri/Anserini), not tuned
-MU, FB_DOCS, FB_TERMS, ORIG_WEIGHT = 2500, 10, 10, 0.5
+MU, FB_DOCS, FB_TERMS, ORIG_WEIGHT = 1000, 10, 50, 0.5
 
 # search spaces
 K1_RANGE, K1_STEP = (0.4, 2.0), 0.1
