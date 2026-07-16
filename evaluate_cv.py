@@ -38,7 +38,7 @@ def main():
         w = round(w, 2)
         return cached(
             f"rm3n_mu={mu}_fd={fb_docs}_ft={fb_terms}_w={w}",
-            lambda: rm3.rank_native(train, utils.INDEX, mu, fb_docs, fb_terms, w),
+            lambda: rm3.rank(train, utils.INDEX, mu, fb_docs, fb_terms, w),
         )
 
     qids = [qid for qid in train if qid in qrels]
