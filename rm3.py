@@ -7,6 +7,22 @@ def initial_run(queries, index, mu, count=1000):
     return utils.indri_run(queries, index, [f"-rule=method:dirichlet,mu:{mu}"], count)
 
 
+def rank_native(queries, index, mu, fb_docs, fb_terms, orig_weight, count=1000):
+    # Indri's built-in relevance-model feedback; fbMu defaults to 0,
+    # i.e. unsmoothed ML term estimates, matching rm1() below.
+    return utils.indri_run(
+        queries,
+        index,
+        [
+            f"-rule=method:dirichlet,mu:{mu}",
+            f"-fbDocs={fb_docs}",
+            f"-fbTerms={fb_terms}",
+            f"-fbOrigWeight={orig_weight}",
+        ],
+        count,
+    )
+
+
 def doc_vector(index, docid):
     internal = utils.dumpindex(index, "di", "docno", docid).strip()
     vec = {}
