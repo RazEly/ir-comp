@@ -1,0 +1,6 @@
+__pycache__/
+*.pdf
+part-1/data/
+part-2/data/
+.eval_cache
+*.png
